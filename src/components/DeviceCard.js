@@ -1,94 +1,72 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { formatTimeAgo } from '../api/tracker';
 
-export default function DeviceCard({ device, location, onPress, index = 0 }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(40)).current;
-
+export default function DeviceCard({ device, location, onPress }) {
   const isActive = device?.is_active === 1;
   const statusColor = isActive ? Colors.success : Colors.danger;
   const statusText = isActive ? 'Online' : 'Offline';
   const statusBg = isActive ? Colors.successBg : Colors.dangerBg;
 
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 600,
-        delay: 300 + index * 150,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 600,
-        delay: 300 + index * 150,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
   return (
-    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => onPress && onPress(device, location)}
-        activeOpacity={0.7}
-      >
-        {/* Header Row */}
-        <View style={styles.headerRow}>
-          <View style={styles.deviceIdContainer}>
-            <View style={styles.deviceIcon}>
-              <Ionicons name="hardware-chip-outline" size={18} color={Colors.primary} />
-            </View>
-            <Text style={styles.deviceId}>{device?.device_id || 'Unknown'}</Text>
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => onPress && onPress(device, location)}
+      activeOpacity={0.7}
+    >
+      {/* Header Row */}
+      <View style={styles.headerRow}>
+        <View style={styles.deviceIdContainer}>
+          <View style={styles.deviceIcon}>
+            <Ionicons name="hardware-chip-outline" size={18} color={Colors.primary} />
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>  
-            <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-            <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
-          </View>
+          <Text style={styles.deviceId}>{device?.device_id || 'Unknown'}</Text>
         </View>
-
-        {/* Info Grid */}
-        <View style={styles.infoGrid}>
-          <View style={styles.infoItem}>
-            <Ionicons name="speedometer-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.infoLabel}>Kecepatan</Text>
-            <Text style={styles.infoValue}>{(device?.estimated_speed || 0).toFixed(1)} km/h</Text>
-          </View>
-          
-          <View style={styles.infoDivider} />
-          
-          <View style={styles.infoItem}>
-            <Ionicons name="navigate-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.infoLabel}>Jarak Tempuh</Text>
-            <Text style={styles.infoValue}>{(device?.total_distance_km || 0).toFixed(2)} km</Text>
-          </View>
-          
-          <View style={styles.infoDivider} />
-          
-          <View style={styles.infoItem}>
-            <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.infoLabel}>Update</Text>
-            <Text style={styles.infoValue} numberOfLines={1}>
-              {device?.seconds_ago ? formatTimeAgo(device.seconds_ago) : '-'}
-            </Text>
-          </View>
+        <View style={[styles.statusBadge, { backgroundColor: statusBg }]}>  
+          <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+          <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
         </View>
+      </View>
 
-        {/* Coordinates */}
-        {location && (
-          <View style={styles.coordsRow}>
-            <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
-            <Text style={styles.coordsText}>
-              {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-    </Animated.View>
+      {/* Info Grid */}
+      <View style={styles.infoGrid}>
+        <View style={styles.infoItem}>
+          <Ionicons name="speedometer-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.infoLabel}>Kecepatan</Text>
+          <Text style={styles.infoValue}>{(device?.estimated_speed || 0).toFixed(1)} km/h</Text>
+        </View>
+        
+        <View style={styles.infoDivider} />
+        
+        <View style={styles.infoItem}>
+          <Ionicons name="navigate-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.infoLabel}>Jarak Tempuh</Text>
+          <Text style={styles.infoValue}>{(device?.total_distance_km || 0).toFixed(2)} km</Text>
+        </View>
+        
+        <View style={styles.infoDivider} />
+        
+        <View style={styles.infoItem}>
+          <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+          <Text style={styles.infoLabel}>Update</Text>
+          <Text style={styles.infoValue} numberOfLines={1}>
+            {device?.seconds_ago ? formatTimeAgo(device.seconds_ago) : '-'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Coordinates */}
+      {location && (
+        <View style={styles.coordsRow}>
+          <Ionicons name="location-outline" size={13} color={Colors.textMuted} />
+          <Text style={styles.coordsText}>
+            {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+          </Text>
+        </View>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -140,8 +118,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   statusText: {

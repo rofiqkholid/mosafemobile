@@ -19,13 +19,13 @@ export default function Header({ systemActive, currentTime }) {
 
       {/* Right - Status and time */}
       <View style={styles.rightSection}>
+        <Text style={styles.timeText}>{currentTime}</Text>
         <View style={styles.statusContainer}>
           <View style={[styles.statusDot, { backgroundColor: systemActive ? Colors.success : Colors.danger }]} />
           <Text style={styles.statusText}>
             {systemActive ? 'Sistem Aktif' : 'Offline'}
           </Text>
         </View>
-        <Text style={styles.timeText}>{currentTime}</Text>
       </View>
     </View>
   );
@@ -71,8 +71,9 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   rightSection: {
-    alignItems: 'flex-end',
-    gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   statusContainer: {
     flexDirection: 'row',
@@ -86,8 +87,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   statusDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
   statusText: {

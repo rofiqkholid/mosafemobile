@@ -1,17 +1,56 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { Colors } from '../constants/colors';
 
-// Conditional import for maps
-let MapView, Marker;
-if (Platform.OS !== 'web') {
-  const Maps = require('react-native-maps');
-  MapView = Maps.default;
-  Marker = Maps.Marker;
-}
+import MapView, { Marker } from 'react-native-maps';
 
 export default function TrackingMap({ locations, devices, loading, mapRef }) {
+  const [showDevicePicker, setShowDevicePicker] = React.useState(false);
+
+  // Focus on selected IoT device
+  const handleSelectDevice = (device, location) => {
+    if (location && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 800);
+    }
+    setShowDevicePicker(false);
+  };
+
+  const handleFocusIoT = () => {
+    if (locations?.length > 0) {
+      setShowDevicePicker(true);
+    }
+  };
+
+  // Focus on user location
+  const handleFocusMe = async () => {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 800);
+      }
+    } catch (err) {
+      console.warn('Focus me error:', err);
+    }
+  };
+
   // Default region
   const defaultRegion = {
     latitude: locations?.[0]?.latitude || -6.289382,
@@ -29,17 +68,6 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
     );
   }
 
-  if (Platform.OS === 'web') {
-    return (
-      <View style={styles.webPlaceholder}>
-        <Ionicons name="map" size={48} color={Colors.border} />
-        <Text style={styles.webPlaceholderText}>Peta tersedia di perangkat Mobile</Text>
-        <View style={styles.webBadge}>
-          <Text style={styles.webBadgeText}>{locations?.length || 0} Perangkat Terdeteksi</Text>
-        </View>
-      </View>
-    );
-  }
 
   // Build a map of device_id -> device for quick lookup
   const deviceMap = {};
@@ -56,7 +84,8 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
         style={styles.map}
         initialRegion={defaultRegion}
         mapType="satellite"
-        showsUserLocation={false}
+        showsUserLocation={true}
+        showsMyLocationButton={false}
         showsCompass={true}
         showsScale={true}
         rotateEnabled={true}
@@ -80,17 +109,17 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
               <View style={styles.markerContainer}>
                 <View style={[
                   styles.markerOuter,
-                  { borderColor: isActive ? Colors.success : Colors.primary }
+                  { borderColor: isActive ? Colors.success : Colors.danger }
                 ]}>
                   <Ionicons
-                    name="bicycle"
-                    size={18}
-                    color={isActive ? Colors.success : Colors.primary}
+                    name="car"
+                    size={22}
+                    color={isActive ? Colors.success : Colors.danger}
                   />
                 </View>
                 <View style={[
                   styles.markerPulse,
-                  { backgroundColor: isActive ? Colors.success : Colors.primary }
+                  { backgroundColor: isActive ? Colors.success : Colors.danger }
                 ]} />
               </View>
             </Marker>
@@ -105,10 +134,81 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
           <Text style={styles.legendText}>Online</Text>
         </View>
         <View style={styles.legendItem}>
-          <View style={[styles.legendDot, { backgroundColor: Colors.primary }]} />
+          <View style={[styles.legendDot, { backgroundColor: Colors.danger }]} />
           <Text style={styles.legendText}>Offline</Text>
         </View>
       </View>
+
+      {/* Map Controls - Floating Right */}
+      <View style={styles.controlsContainer}>
+        <TouchableOpacity 
+          style={styles.controlButton} 
+          onPress={handleFocusIoT}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="car" size={24} color={Colors.primary} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.controlButton} 
+          onPress={handleFocusMe}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="locate" size={24} color={Colors.success} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Device Picker Bottom Sheet */}
+      <Modal
+        visible={showDevicePicker}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowDevicePicker(false)}
+      >
+        <Pressable 
+          style={styles.modalOverlay} 
+          onPress={() => setShowDevicePicker(false)}
+        >
+          <View style={styles.bottomSheet}>
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>Pilih Perangkat untuk Fokus</Text>
+            </View>
+
+            <FlatList
+              data={locations}
+              keyExtractor={(item) => item.device_id}
+              contentContainerStyle={styles.sheetList}
+              renderItem={({ item }) => {
+                const device = devices?.find(d => d.device_id === item.device_id);
+                const isActive = device?.is_active === 1;
+                
+                return (
+                  <TouchableOpacity 
+                    style={styles.deviceItem}
+                    onPress={() => handleSelectDevice(device, item)}
+                  >
+                    <View style={[styles.itemIcon, { backgroundColor: isActive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }]}>
+                      <Ionicons 
+                        name="car" 
+                        size={20} 
+                        color={isActive ? Colors.success : Colors.danger} 
+                      />
+                    </View>
+                    <View style={styles.itemInfo}>
+                      <Text style={styles.itemTitle}>{item.device_id}</Text>
+                      <Text style={styles.itemSub}>
+                        Speed: {item.speed || 0} km/h • {isActive ? 'Online' : 'Offline'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -174,14 +274,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   markerOuter: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
     borderWidth: 2,
+    borderStyle: 'solid',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 2,
+    overflow: 'hidden',
   },
   markerPulse: {
     width: 12,
@@ -217,5 +319,90 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 11,
     fontWeight: '500',
+  },
+  controlsContainer: {
+    position: 'absolute',
+    right: 12,
+    top: 12,
+    gap: 8,
+  },
+  controlButton: {
+    backgroundColor: '#1E293B',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    justifyContent: 'flex-end',
+  },
+  bottomSheet: {
+    backgroundColor: Colors.bgCard,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '60%',
+    paddingBottom: 40,
+  },
+  sheetHeader: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: Colors.border,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    color: Colors.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  sheetList: {
+    padding: 16,
+  },
+  deviceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    backgroundColor: Colors.bgDark,
+    borderRadius: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  itemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  itemInfo: {
+    flex: 1,
+  },
+  itemTitle: {
+    color: Colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  itemSub: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
   },
 });

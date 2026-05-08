@@ -1,39 +1,11 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 
-export default function StatCard({ icon, iconColor, iconBg, label, value, index = 0 }) {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 500,
-        delay: index * 120,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 500,
-        delay: index * 120,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
+export default function StatCard({ icon, iconColor, iconBg, label, value }) {
   return (
-    <Animated.View
-      style={[
-        styles.card,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
+    <View style={styles.card}>
       <View style={[styles.iconContainer, { backgroundColor: iconBg }]}>
         <Ionicons name={icon} size={22} color={iconColor} />
       </View>
@@ -41,7 +13,7 @@ export default function StatCard({ icon, iconColor, iconBg, label, value, index 
         <Text style={styles.value}>{value}</Text>
         <Text style={styles.label} numberOfLines={1}>{label}</Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

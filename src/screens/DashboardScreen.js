@@ -1,88 +1,29 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   RefreshControl,
-  SafeAreaView,
   StatusBar,
-  Animated,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { fetchDashboardData, formatTimeAgo } from '../api/tracker';
 import Header from '../components/Header';
 import StatCard from '../components/StatCard';
 import TrackingMap from '../components/TrackingMap';
 import DeviceCard from '../components/DeviceCard';
 
-const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
-
-export default function DashboardScreen() {
-  const [locations, setLocations] = useState([]);
-  const [devices, setDevices] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(null);
-  const [currentTime, setCurrentTime] = useState('');
-  const mapRef = useRef(null);
-
-  // Update clock every second
-  useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setCurrentTime(
-        now.toLocaleTimeString('id-ID', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        })
-      );
-    };
-    updateTime();
-    const timer = setInterval(updateTime, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  // Fetch dashboard data
-  const loadData = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      
-      setError(null);
-      const data = await fetchDashboardData();
-      setLocations(data.locations || []);
-      setDevices(data.devices || []);
-    } catch (err) {
-      setError('Gagal memuat data. Tarik ke bawah untuk mencoba lagi.');
-      console.error('Dashboard load error:', err);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Auto refresh
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadData(true);
-    }, AUTO_REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [loadData]);
-
-  // Pull to refresh
-  const onRefresh = useCallback(() => {
-    loadData(true);
-  }, [loadData]);
-
+export default function DashboardScreen({ 
+  locations, 
+  devices, 
+  loading, 
+  refreshing, 
+  error, 
+  currentTime, 
+  loadData,
+  mapRef 
+}) {
   // Navigate map to device
   const handleDevicePress = useCallback((device, location) => {
     if (location && mapRef.current) {
@@ -93,13 +34,13 @@ export default function DashboardScreen() {
         longitudeDelta: 0.01,
       }, 800);
     }
-  }, []);
+  }, [mapRef]);
 
   // Compute stats
   const totalDevices = devices.length;
   const activeDevices = devices.filter(d => d.is_active === 1).length;
   const totalVehicles = locations.length;
-  const offlineDevices = totalDevices - activeDevices;
+  const serviceCount = devices.filter(d => (d.total_distance_km || 0) >= 2500).length;
 
   // Build location lookup
   const locationMap = {};
@@ -108,16 +49,14 @@ export default function DashboardScreen() {
   });
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={Colors.bgDark} />
-      
+    <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
+            onRefresh={() => loadData(true)}
             colors={[Colors.primary]}
             tintColor={Colors.primary}
             progressBackgroundColor={Colors.bgCard}
@@ -169,7 +108,7 @@ export default function DashboardScreen() {
                 iconColor={Colors.info}
                 iconBg={Colors.infoBg}
                 label="Notifikasi Service"
-                value={offlineDevices}
+                value={serviceCount}
                 index={3}
               />
             </View>
@@ -183,11 +122,8 @@ export default function DashboardScreen() {
               <Ionicons name="map-outline" size={18} color={Colors.primary} />
               <Text style={styles.sectionTitle}>Live Tracking Map</Text>
             </View>
-            <View style={styles.refreshBadge}>
-              <Ionicons name="refresh-outline" size={12} color={Colors.textMuted} />
-              <Text style={styles.refreshText}>Auto 30s</Text>
-            </View>
           </View>
+
           <TrackingMap
             locations={locations}
             devices={devices}
@@ -202,9 +138,6 @@ export default function DashboardScreen() {
             <View style={styles.sectionTitleRow}>
               <Ionicons name="list-outline" size={18} color={Colors.primary} />
               <Text style={styles.sectionTitle}>Perangkat & Kendaraan</Text>
-            </View>
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{totalDevices}</Text>
             </View>
           </View>
 
@@ -240,21 +173,20 @@ export default function DashboardScreen() {
           <Text style={styles.footerCopy}>© 2026 All rights reserved</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
     backgroundColor: Colors.bgDark,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 30,
+    paddingBottom: 100, // Space for BottomTab
   },
   statsGrid: {
     paddingHorizontal: 16,
@@ -287,35 +219,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,
-  },
-  refreshBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.bgCard,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  refreshText: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    fontWeight: '500',
-  },
-  countBadge: {
-    backgroundColor: 'rgba(14, 165, 233, 0.15)',
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.3)',
-  },
-  countText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
   },
   errorContainer: {
     backgroundColor: Colors.bgCard,
