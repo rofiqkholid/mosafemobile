@@ -1,32 +1,84 @@
-import React from 'react';
+import React, { forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Colors } from '../constants/colors';
 
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 
-export default function TrackingMap({ locations, devices, loading, mapRef }) {
+const TrackingMap = forwardRef(({ locations = [], devices = [], loading, mapRef, showRoute = true }, ref) => {
   const [showDevicePicker, setShowDevicePicker] = React.useState(false);
+  const [routeCoords, setRouteCoords] = React.useState([]);
+  const [isRouting, setIsRouting] = React.useState(false);
+  const [pickerMode, setPickerMode] = React.useState('focus'); // 'focus' or 'route'
 
-  // Focus on selected IoT device
-  const handleSelectDevice = (device, location) => {
-    if (location && mapRef.current) {
+  useImperativeHandle(ref, () => ({
+    openPicker: (mode = 'focus') => {
+      setPickerMode(mode);
+      setShowDevicePicker(true);
+    },
+    clearRoute: () => setRouteCoords([]),
+  }));
+
+
+  // Fetch route from OSRM
+  const fetchRoute = async (userCoords, deviceCoords) => {
+    try {
+      setIsRouting(true);
+      const url = `https://router.project-osrm.org/route/v1/driving/${userCoords.longitude},${userCoords.latitude};${deviceCoords.longitude},${deviceCoords.latitude}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data && data.routes && data.routes.length > 0) {
+        const coords = data.routes[0].geometry.coordinates.map(c => ({
+          latitude: c[1],
+          longitude: c[0]
+        }));
+        setRouteCoords(coords);
+      }
+    } catch (err) {
+      console.warn('Routing error:', err);
+    } finally {
+      setIsRouting(false);
+    }
+  };
+
+  // Focus or Route selected IoT device
+  const handleSelectDevice = async (device, location) => {
+    if (location && mapRef && mapRef.current) {
       mapRef.current.animateToRegion({
         latitude: location.latitude,
         longitude: location.longitude,
         latitudeDelta: 0.01,
         longitudeDelta: 0.01,
       }, 800);
+
+      if (pickerMode === 'route' && showRoute) {
+        // Get user location for routing
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const userLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+            if (userLoc && userLoc.coords) {
+              fetchRoute(userLoc.coords, location);
+            }
+          }
+        } catch (err) {
+          console.warn('Could not get user location for routing');
+        }
+      }
     }
     setShowDevicePicker(false);
   };
 
+
   const handleFocusIoT = () => {
-    if (locations?.length > 0) {
+    if (locations && locations.length > 0) {
+      setPickerMode('focus');
       setShowDevicePicker(true);
     }
   };
+
 
   // Focus on user location
   const handleFocusMe = async () => {
@@ -38,7 +90,7 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
         accuracy: Location.Accuracy.Balanced,
       });
       
-      if (mapRef.current) {
+      if (location && location.coords && mapRef && mapRef.current) {
         mapRef.current.animateToRegion({
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
@@ -68,12 +120,13 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
     );
   }
 
-
   // Build a map of device_id -> device for quick lookup
   const deviceMap = {};
-  if (devices) {
+  if (devices && Array.isArray(devices)) {
     devices.forEach(d => {
-      deviceMap[d.device_id] = d;
+      if (d && d.device_id) {
+        deviceMap[d.device_id] = d;
+      }
     });
   }
 
@@ -92,7 +145,8 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
         zoomEnabled={true}
         pitchEnabled={true}
       >
-        {locations?.map((loc, idx) => {
+        {Array.isArray(locations) && locations.map((loc, idx) => {
+          if (!loc) return null;
           const dev = deviceMap[loc.device_id];
           const isActive = dev?.is_active === 1;
 
@@ -125,6 +179,15 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
             </Marker>
           );
         })}
+
+        {routeCoords.length > 0 && (
+          <Polyline
+            coordinates={routeCoords}
+            strokeWidth={4}
+            strokeColor={Colors.primary}
+            lineDashPattern={[1]}
+          />
+        )}
       </MapView>
 
       {/* Map Overlay - Top Left Legend */}
@@ -137,6 +200,16 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
           <View style={[styles.legendDot, { backgroundColor: Colors.danger }]} />
           <Text style={styles.legendText}>Offline</Text>
         </View>
+        
+        {routeCoords.length > 0 && (
+          <TouchableOpacity 
+            style={styles.clearRouteBtn} 
+            onPress={() => setRouteCoords([])}
+          >
+            <Ionicons name="close-circle" size={16} color={Colors.danger} />
+            <Text style={styles.clearRouteText}>Hapus Rute</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Map Controls - Floating Right */}
@@ -172,7 +245,9 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
           <View style={styles.bottomSheet}>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetHandle} />
-              <Text style={styles.sheetTitle}>Pilih Perangkat untuk Fokus</Text>
+              <Text style={styles.sheetTitle}>
+                {pickerMode === 'route' ? 'Pilih Tujuan Rute' : 'Pilih Perangkat untuk Fokus'}
+              </Text>
             </View>
 
             <FlatList
@@ -211,7 +286,10 @@ export default function TrackingMap({ locations, devices, loading, mapRef }) {
       </Modal>
     </View>
   );
-}
+});
+
+export default TrackingMap;
+
 
 const styles = StyleSheet.create({
   container: {
@@ -239,35 +317,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '500',
-  },
-  webPlaceholder: {
-    height: 320,
-    borderRadius: 20,
-    backgroundColor: Colors.bgCard,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 16,
-    borderStyle: 'dashed',
-  },
-  webPlaceholderText: {
-    color: Colors.textMuted,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  webBadge: {
-    backgroundColor: 'rgba(14, 165, 233, 0.1)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(14, 165, 233, 0.2)',
-  },
-  webBadgeText: {
-    color: Colors.primary,
-    fontSize: 12,
-    fontWeight: '700',
   },
   markerContainer: {
     alignItems: 'center',
@@ -370,6 +419,7 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 15,
     fontWeight: '700',
+    marginBottom: 4,
   },
   sheetList: {
     padding: 16,
@@ -404,5 +454,19 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 11,
     marginTop: 2,
+  },
+  clearRouteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  clearRouteText: {
+    color: Colors.danger,
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

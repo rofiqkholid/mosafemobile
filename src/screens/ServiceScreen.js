@@ -9,7 +9,7 @@ export default function ServiceScreen({ devices, currentTime }) {
 
   return (
     <View style={styles.container}>
-      <Header systemActive={activeDevices > 0} currentTime={currentTime} />
+      <Header systemActive={activeDevices > 0} currentTime={currentTime} title="Service" />
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.emptyContainer}>
           <View style={styles.iconCircle}>

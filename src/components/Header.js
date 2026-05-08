@@ -3,17 +3,23 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 
-export default function Header({ systemActive, currentTime }) {
+export default function Header({ systemActive, currentTime, title }) {
+  const isDashboard = !title || title === 'Dashboard';
+
   return (
     <View style={styles.header}>
-      {/* Left - App branding */}
+      {/* Left - App branding or Page Title */}
       <View style={styles.brandContainer}>
         <View style={styles.logoContainer}>
-          <Ionicons name="locate" size={20} color={Colors.primary} />
+          <Ionicons name={isDashboard ? "locate" : "chevron-back-outline"} size={20} color={Colors.primary} />
         </View>
         <View>
-          <Text style={styles.brandTitle}>GPS<Text style={styles.brandAccent}>Track</Text></Text>
-          <Text style={styles.brandSub}>Live Tracking Map</Text>
+          {isDashboard ? (
+            <Text style={styles.brandTitle}>GPS<Text style={styles.brandAccent}>Track</Text></Text>
+          ) : (
+            <Text style={styles.brandTitle}>{title}</Text>
+          )}
+          <Text style={styles.brandSub}>{isDashboard ? 'Live Tracking Map' : 'MoSafe Application'}</Text>
         </View>
       </View>
 

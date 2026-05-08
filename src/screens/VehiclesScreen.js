@@ -10,13 +10,17 @@ export default function VehiclesScreen({ devices, locations, currentTime }) {
   
   // Build location lookup
   const locationMap = {};
-  locations.forEach(loc => {
-    locationMap[loc.device_id] = loc;
-  });
+  if (Array.isArray(locations)) {
+    locations.forEach(loc => {
+      if (loc && loc.device_id) {
+        locationMap[loc.device_id] = loc;
+      }
+    });
+  }
 
   return (
     <View style={styles.container}>
-      <Header systemActive={activeDevices > 0} currentTime={currentTime} />
+      <Header systemActive={activeDevices > 0} currentTime={currentTime} title="Kendaraan" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.sectionHeader}>
           <Ionicons name="car-outline" size={20} color={Colors.primary} />

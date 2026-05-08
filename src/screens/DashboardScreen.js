@@ -37,16 +37,20 @@ export default function DashboardScreen({
   }, [mapRef]);
 
   // Compute stats
-  const totalDevices = devices.length;
-  const activeDevices = devices.filter(d => d.is_active === 1).length;
-  const totalVehicles = locations.length;
-  const serviceCount = devices.filter(d => (d.total_distance_km || 0) >= 2500).length;
+  const totalDevices = devices?.length || 0;
+  const activeDevices = devices?.filter(d => d.is_active === 1).length || 0;
+  const totalVehicles = locations?.length || 0;
+  const serviceCount = devices?.filter(d => (d.total_distance_km || 0) >= 2500).length || 0;
 
   // Build location lookup
   const locationMap = {};
-  locations.forEach(loc => {
-    locationMap[loc.device_id] = loc;
-  });
+  if (Array.isArray(locations)) {
+    locations.forEach(loc => {
+      if (loc && loc.device_id) {
+        locationMap[loc.device_id] = loc;
+      }
+    });
+  }
 
   return (
     <View style={styles.container}>
@@ -65,7 +69,7 @@ export default function DashboardScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Header systemActive={activeDevices > 0} currentTime={currentTime} />
+        <Header systemActive={activeDevices > 0} currentTime={currentTime} title="Dashboard" />
 
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
@@ -129,6 +133,7 @@ export default function DashboardScreen({
             devices={devices}
             loading={loading}
             mapRef={mapRef}
+            showRoute={false}
           />
         </View>
 
