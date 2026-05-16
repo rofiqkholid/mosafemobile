@@ -1,6 +1,7 @@
 // MoSafe GPS Tracker - API Service
 const BASE_URL = 'https://mosafe.fun/api';
 
+
 /**
  * Fetch latest device locations
  * Returns: [{ device_id, latitude, longitude, speed, created_at }]
@@ -77,4 +78,52 @@ export function formatDate(dateStr) {
     minute: '2-digit',
     second: '2-digit',
   });
+}
+
+/**
+ * Fetch available device IDs for the dropdown
+ * Returns: { status, data: ['IOT-DEV-01', ...] }
+ */
+export async function fetchAvailableDevices() {
+  try {
+    const response = await fetch(`${BASE_URL}/available-devices`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching available devices:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a new vehicle
+ * Returns: { status, message, data }
+ */
+export async function addVehicle(vehicleData) {
+  try {
+    const response = await fetch(`${BASE_URL}/vehicles`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(vehicleData),
+    });
+    
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || 'Gagal menambahkan kendaraan');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error adding vehicle:', error);
+    throw error;
+  }
 }

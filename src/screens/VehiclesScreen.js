@@ -1,11 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import Header from '../components/Header';
 import DeviceCard from '../components/DeviceCard';
+import AddVehicleScreen from './AddVehicleScreen';
 
-export default function VehiclesScreen({ devices, locations, currentTime }) {
+export default function VehiclesScreen({ devices, locations, currentTime, loadData }) {
+  const [isAddModalVisible, setAddModalVisible] = useState(false);
+  
   const activeDevices = devices.filter(d => d.is_active === 1).length;
   
   // Build location lookup
@@ -23,8 +26,17 @@ export default function VehiclesScreen({ devices, locations, currentTime }) {
       <Header systemActive={activeDevices > 0} currentTime={currentTime} title="Kendaraan" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="car-outline" size={20} color={Colors.primary} />
-          <Text style={styles.sectionTitle}>Daftar Kendaraan & IoT</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Ionicons name="car-outline" size={20} color={Colors.primary} />
+            <Text style={styles.sectionTitle}>Daftar Kendaraan & IoT</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setAddModalVisible(true)}
+          >
+            <Ionicons name="add" size={16} color="#fff" />
+            <Text style={styles.addButtonText}>Tambah</Text>
+          </TouchableOpacity>
         </View>
 
         {devices.length === 0 ? (
@@ -35,7 +47,7 @@ export default function VehiclesScreen({ devices, locations, currentTime }) {
         ) : (
           devices.map((device, idx) => (
             <DeviceCard
-              key={device.device_id}
+              key={device.device_id || `device-${idx}`}
               device={device}
               location={locationMap[device.device_id]}
               index={idx}
@@ -43,6 +55,20 @@ export default function VehiclesScreen({ devices, locations, currentTime }) {
           ))
         )}
       </ScrollView>
+
+      <Modal
+        visible={isAddModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setAddModalVisible(false)}
+      >
+        <AddVehicleScreen 
+          onClose={() => setAddModalVisible(false)} 
+          onAdded={() => {
+            if (loadData) loadData(true);
+          }}
+        />
+      </Modal>
     </View>
   );
 }
@@ -59,7 +85,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 16,
     paddingHorizontal: 4,
   },
@@ -67,6 +93,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
   },
   emptyContainer: {
     backgroundColor: Colors.bgCard,
