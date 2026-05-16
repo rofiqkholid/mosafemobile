@@ -5,21 +5,21 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { fetchAvailableDevices, addVehicle } from '../api/tracker';
+import { fetchAvailableDevices, addVehicle, updateVehicle } from '../api/tracker';
 
-export default function AddVehicleScreen({ onClose, onAdded }) {
+export default function AddVehicleScreen({ onClose, onAdded, vehicle = null }) {
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState([]);
   
   const [formData, setFormData] = useState({
-    name: '',
-    type: 'motor',
-    plate_number: '',
-    brand: '',
-    model: '',
-    year: '',
-    device_id: '',
-    current_odometer: '0',
+    name: vehicle?.name || '',
+    type: vehicle?.type || 'motor',
+    plate_number: vehicle?.plate_number || '',
+    brand: vehicle?.brand || '',
+    model: vehicle?.model || '',
+    year: vehicle?.year ? vehicle.year.toString() : '',
+    device_id: vehicle?.device_id || '',
+    current_odometer: vehicle?.current_odometer !== undefined ? vehicle.current_odometer.toString() : '0',
   });
 
   useEffect(() => {
@@ -30,10 +30,20 @@ export default function AddVehicleScreen({ onClose, onAdded }) {
     try {
       const result = await fetchAvailableDevices();
       if (result && result.data) {
-        setDevices(result.data);
+        // If editing and has a device_id, make sure it's in the list
+        const fetchedDevices = result.data;
+        if (vehicle?.device_id && !fetchedDevices.includes(vehicle.device_id)) {
+          setDevices([vehicle.device_id, ...fetchedDevices]);
+        } else {
+          setDevices(fetchedDevices);
+        }
       }
     } catch (e) {
       console.log('Failed to load devices, might be missing endpoint', e);
+      // Fallback: if we have a current device_id, keep it in the list so it doesn't disappear
+      if (vehicle?.device_id) {
+        setDevices([vehicle.device_id]);
+      }
     }
   };
 
@@ -51,15 +61,25 @@ export default function AddVehicleScreen({ onClose, onAdded }) {
         current_odometer: formData.current_odometer ? parseInt(formData.current_odometer) : 0,
       };
       
-      await addVehicle(payload);
-      Alert.alert('Sukses', 'Kendaraan berhasil ditambahkan!', [
-        { text: 'OK', onPress: () => {
-          onAdded();
-          onClose();
-        }}
-      ]);
+      if (vehicle && vehicle.id) {
+        await updateVehicle(vehicle.id, payload);
+        Alert.alert('Sukses', 'Kendaraan berhasil diperbarui!', [
+          { text: 'OK', onPress: () => {
+            onAdded();
+            onClose();
+          }}
+        ]);
+      } else {
+        await addVehicle(payload);
+        Alert.alert('Sukses', 'Kendaraan berhasil ditambahkan!', [
+          { text: 'OK', onPress: () => {
+            onAdded();
+            onClose();
+          }}
+        ]);
+      }
     } catch (e) {
-      Alert.alert('Gagal', e.message || 'Gagal menambahkan kendaraan');
+      Alert.alert('Gagal', e.message || 'Gagal menyimpan kendaraan');
     } finally {
       setLoading(false);
     }
@@ -74,7 +94,7 @@ export default function AddVehicleScreen({ onClose, onAdded }) {
         <TouchableOpacity onPress={onClose} style={styles.backButton}>
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tambah Kendaraan Baru</Text>
+        <Text style={styles.headerTitle}>{vehicle ? 'Edit Kendaraan' : 'Tambah Kendaraan Baru'}</Text>
         <View style={{width: 40}} />
       </View>
 

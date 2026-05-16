@@ -67,18 +67,35 @@ export async function fetchVehicles() {
 }
 
 /**
+ * Fetch historical GPS trails for all devices
+ * Returns an object mapping device IDs to an array of {lat, lng}
+ */
+export async function fetchDeviceTrails() {
+  try {
+    const response = await fetch(`${BASE_URL}/device-trails`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching device trails:', error);
+    return {};
+  }
+}
+
+/**
  * Fetch both locations and devices in parallel
  */
 export async function fetchDashboardData() {
-  const [locations, devices, vehiclesResponse] = await Promise.all([
+  const [locations, devices, vehiclesResponse, trails] = await Promise.all([
     fetchLatestLocations(),
     fetchDevices(),
     fetchVehicles(),
+    fetchDeviceTrails(),
   ]);
   return { 
     locations, 
     devices,
-    vehicles: vehiclesResponse?.data || []
+    vehicles: vehiclesResponse?.data || [],
+    trails: trails || {},
   };
 }
 
@@ -154,3 +171,59 @@ export async function addVehicle(vehicleData) {
     throw error;
   }
 }
+
+/**
+ * Update an existing vehicle
+ * Returns: { status, message, data }
+ */
+export async function updateVehicle(id, vehicleData) {
+  try {
+    const response = await fetch(`${BASE_URL}/vehicles/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(vehicleData),
+    });
+    
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || 'Gagal memperbarui kendaraan');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error updating vehicle:', error);
+    throw error;
+  }
+}
+
+/**
+ * Add a service record to reset the service counter
+ * Returns: { status, message, data }
+ */
+export async function addServiceRecord(id, component = 'Service Rutin') {
+  try {
+    const response = await fetch(`${BASE_URL}/vehicles/${id}/service`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ component }),
+    });
+    
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || 'Gagal mencatat service');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error adding service record:', error);
+    throw error;
+  }
+}
+
+

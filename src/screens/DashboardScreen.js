@@ -17,6 +17,7 @@ import DeviceCard from '../components/DeviceCard';
 export default function DashboardScreen({ 
   locations, 
   devices, 
+  trails,
   loading, 
   refreshing, 
   error, 
@@ -131,6 +132,7 @@ export default function DashboardScreen({
           <TrackingMap
             locations={locations}
             devices={devices}
+            trails={trails}
             loading={loading}
             mapRef={mapRef}
             showRoute={false}

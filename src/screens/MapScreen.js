@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import TrackingMap from '../components/TrackingMap';
 import DeviceCard from '../components/DeviceCard';
 
-export default function MapScreen({ locations, devices, loading, mapRef, currentTime }) {
+export default function MapScreen({ locations, devices, trails, loading, mapRef, currentTime }) {
   const activeDevices = devices?.filter(d => d.is_active === 1).length || 0;
   const trackingMapRef = useRef(null);
 
@@ -19,7 +19,8 @@ export default function MapScreen({ locations, devices, loading, mapRef, current
         <TrackingMap 
           ref={trackingMapRef}
           locations={locations} 
-          devices={devices} 
+          devices={devices}
+          trails={trails}
           loading={loading} 
           mapRef={mapRef} 
         />

@@ -6,7 +6,7 @@ import { Colors } from '../constants/colors';
 
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
-const TrackingMap = forwardRef(({ locations = [], devices = [], loading, mapRef, showRoute = true }, ref) => {
+const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loading, mapRef, showRoute = true }, ref) => {
   const [showDevicePicker, setShowDevicePicker] = React.useState(false);
   const [routeCoords, setRouteCoords] = React.useState([]);
   const [isRouting, setIsRouting] = React.useState(false);
@@ -180,6 +180,23 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], loading, mapRef,
           );
         })}
 
+        {/* Historical GPS Trails */}
+        {trails && Object.entries(trails).map(([deviceId, trailCoords]) => {
+          if (!trailCoords || trailCoords.length < 2) return null;
+          const isActive = deviceMap[deviceId]?.is_active === 1;
+          const mapCoords = trailCoords.map(c => ({ latitude: c.lat, longitude: c.lng }));
+          
+          return (
+            <Polyline
+              key={`trail-${deviceId}`}
+              coordinates={mapCoords}
+              strokeWidth={3}
+              strokeColor={Colors.primary}
+            />
+          );
+        })}
+
+        {/* OSRM Route to Device */}
         {routeCoords.length > 0 && (
           <Polyline
             coordinates={routeCoords}

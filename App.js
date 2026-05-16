@@ -24,6 +24,7 @@ export default function App() {
   const [locations, setLocations] = useState([]);
   const [devices, setDevices] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [trails, setTrails] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -44,6 +45,7 @@ export default function App() {
       setLocations(data.locations || []);
       setDevices(data.devices || []);
       setVehicles(data.vehicles || []);
+      setTrails(data.trails || {});
       setError(null);
     } catch (err) {
       setError('Gagal memuat data');
@@ -91,7 +93,7 @@ export default function App() {
   };
 
   const renderScreens = () => {
-    const props = { locations, devices, vehicles, loading, refreshing, error, currentTime, loadData };
+    const props = { locations, devices, vehicles, trails, loading, refreshing, error, currentTime, loadData };
     
     const screens = [
       { id: 'dashboard', component: <DashboardScreen {...props} mapRef={dashboardMapRef} /> },

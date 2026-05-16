@@ -8,8 +8,19 @@ import AddVehicleScreen from './AddVehicleScreen';
 
 export default function VehiclesScreen({ vehicles, devices, currentTime, loadData }) {
   const [isAddModalVisible, setAddModalVisible] = useState(false);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
   
   const activeDevices = devices.filter(d => d.is_active === 1).length;
+
+  const handleAddPress = () => {
+    setSelectedVehicle(null);
+    setAddModalVisible(true);
+  };
+
+  const handleVehiclePress = (vehicle) => {
+    setSelectedVehicle(vehicle);
+    setAddModalVisible(true);
+  };
 
   return (
     <View style={styles.container}>
@@ -22,7 +33,7 @@ export default function VehiclesScreen({ vehicles, devices, currentTime, loadDat
           </View>
           <TouchableOpacity 
             style={styles.addButton}
-            onPress={() => setAddModalVisible(true)}
+            onPress={handleAddPress}
           >
             <Ionicons name="add" size={16} color="#fff" />
             <Text style={styles.addButtonText}>Tambah</Text>
@@ -36,22 +47,25 @@ export default function VehiclesScreen({ vehicles, devices, currentTime, loadDat
           </View>
         ) : (
           vehicles.map((vehicle, idx) => (
-            <VehicleCard
+            <TouchableOpacity 
               key={vehicle.id || `vehicle-${idx}`}
-              vehicle={vehicle}
-            />
+              onPress={() => handleVehiclePress(vehicle)}
+              activeOpacity={0.7}
+            >
+              <VehicleCard vehicle={vehicle} />
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
 
       <Modal
-
         visible={isAddModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"
         onRequestClose={() => setAddModalVisible(false)}
       >
         <AddVehicleScreen 
+          vehicle={selectedVehicle}
           onClose={() => setAddModalVisible(false)} 
           onAdded={() => {
             if (loadData) loadData(true);
