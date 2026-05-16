@@ -3,23 +3,13 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import Header from '../components/Header';
-import DeviceCard from '../components/DeviceCard';
+import VehicleCard from '../components/VehicleCard';
 import AddVehicleScreen from './AddVehicleScreen';
 
-export default function VehiclesScreen({ devices, locations, currentTime, loadData }) {
+export default function VehiclesScreen({ vehicles, devices, currentTime, loadData }) {
   const [isAddModalVisible, setAddModalVisible] = useState(false);
   
   const activeDevices = devices.filter(d => d.is_active === 1).length;
-  
-  // Build location lookup
-  const locationMap = {};
-  if (Array.isArray(locations)) {
-    locations.forEach(loc => {
-      if (loc && loc.device_id) {
-        locationMap[loc.device_id] = loc;
-      }
-    });
-  }
 
   return (
     <View style={styles.container}>
@@ -28,7 +18,7 @@ export default function VehiclesScreen({ devices, locations, currentTime, loadDa
         <View style={styles.sectionHeader}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Ionicons name="car-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Daftar Kendaraan & IoT</Text>
+            <Text style={styles.sectionTitle}>Daftar Kendaraan Terdaftar</Text>
           </View>
           <TouchableOpacity 
             style={styles.addButton}
@@ -39,24 +29,23 @@ export default function VehiclesScreen({ devices, locations, currentTime, loadDa
           </TouchableOpacity>
         </View>
 
-        {devices.length === 0 ? (
+        {!vehicles || vehicles.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="cube-outline" size={40} color={Colors.textMuted} />
-            <Text style={styles.emptyText}>Belum ada perangkat terdaftar</Text>
+            <Text style={styles.emptyText}>Belum ada kendaraan terdaftar</Text>
           </View>
         ) : (
-          devices.map((device, idx) => (
-            <DeviceCard
-              key={device.device_id || `device-${idx}`}
-              device={device}
-              location={locationMap[device.device_id]}
-              index={idx}
+          vehicles.map((vehicle, idx) => (
+            <VehicleCard
+              key={vehicle.id || `vehicle-${idx}`}
+              vehicle={vehicle}
             />
           ))
         )}
       </ScrollView>
 
       <Modal
+
         visible={isAddModalVisible}
         animationType="slide"
         presentationStyle="pageSheet"

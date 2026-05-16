@@ -45,14 +45,41 @@ export async function fetchDevices() {
 }
 
 /**
+ * Fetch all vehicles with metadata
+ * Returns: { status, data: [{ id, name, type, plate_number, is_online, current_odometer, service_status }] }
+ */
+export async function fetchVehicles() {
+  try {
+    const response = await fetch(`${BASE_URL}/vehicles`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching vehicles:', error);
+    // Return empty fallback structure since backend might not be deployed yet
+    return { status: 'error', data: [] };
+  }
+}
+
+/**
  * Fetch both locations and devices in parallel
  */
 export async function fetchDashboardData() {
-  const [locations, devices] = await Promise.all([
+  const [locations, devices, vehiclesResponse] = await Promise.all([
     fetchLatestLocations(),
     fetchDevices(),
+    fetchVehicles(),
   ]);
-  return { locations, devices };
+  return { 
+    locations, 
+    devices,
+    vehicles: vehiclesResponse?.data || []
+  };
 }
 
 /**

@@ -189,7 +189,7 @@ export default function AddVehicleScreen({ onClose, onAdded }) {
             <Text style={styles.label}>Odometer Awal (KM)</Text>
             {!!formData.device_id && (
               <View style={styles.badge}>
-                <Ionicons name="satellite" size={10} color={Colors.primary} />
+                <Ionicons name="hardware-chip-outline" size={10} color={Colors.primary} />
                 <Text style={styles.badgeText}>Auto dari GPS</Text>
               </View>
             )}

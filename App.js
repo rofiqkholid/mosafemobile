@@ -23,6 +23,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [locations, setLocations] = useState([]);
   const [devices, setDevices] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -35,13 +36,14 @@ export default function App() {
 
   // Fetch data logic
   const loadData = useCallback(async (isRefresh = false) => {
-    try {
+    try { 
       if (isRefresh) setRefreshing(true);
       else setLoading(true);
       
       const data = await fetchDashboardData();
       setLocations(data.locations || []);
       setDevices(data.devices || []);
+      setVehicles(data.vehicles || []);
       setError(null);
     } catch (err) {
       setError('Gagal memuat data');
@@ -89,7 +91,7 @@ export default function App() {
   };
 
   const renderScreens = () => {
-    const props = { locations, devices, loading, refreshing, error, currentTime, loadData };
+    const props = { locations, devices, vehicles, loading, refreshing, error, currentTime, loadData };
     
     const screens = [
       { id: 'dashboard', component: <DashboardScreen {...props} mapRef={dashboardMapRef} /> },
@@ -97,6 +99,7 @@ export default function App() {
       { id: 'service', component: <ServiceScreen {...props} /> },
       { id: 'vehicles', component: <VehiclesScreen {...props} /> },
     ];
+
 
     return (
       <Animated.View style={[
