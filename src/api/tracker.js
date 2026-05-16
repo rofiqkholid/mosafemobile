@@ -226,4 +226,31 @@ export async function addServiceRecord(id, component = 'Service Rutin') {
   }
 }
 
+/**
+ * Authenticate user
+ * Returns: { status, message, user }
+ */
+export async function apiLogin(username, password) {
+  try {
+    const response = await fetch(`${BASE_URL}/login`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+    
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.message || 'Login gagal');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Error during login:', error);
+    throw error;
+  }
+}
+
 

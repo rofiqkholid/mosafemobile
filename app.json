@@ -24,7 +24,12 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.anonymous.mosafemobile"
+      "package": "com.anonymous.mosafemobile",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDUMMY_KEY_PLEASE_REPLACE_WITH_REAL_KEY"
+        }
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"

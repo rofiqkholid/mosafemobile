@@ -6,6 +6,7 @@ import { Colors } from './src/constants/colors';
 import { fetchDashboardData } from './src/api/tracker';
 
 // Screens
+import LoginScreen from './src/screens/LoginScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
 import MapScreen from './src/screens/MapScreen';
 import ServiceScreen from './src/screens/ServiceScreen';
@@ -13,6 +14,8 @@ import VehiclesScreen from './src/screens/VehiclesScreen';
 
 // Components
 import BottomTab from './src/components/BottomTab';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ActivityIndicator } from 'react-native';
 
 const AUTO_REFRESH_INTERVAL = 5000;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -20,6 +23,8 @@ const TABS_ORDER = ['dashboard', 'map', 'service', 'vehicles'];
 
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [locations, setLocations] = useState([]);
   const [devices, setDevices] = useState([]);
@@ -57,6 +62,23 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const checkLogin = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          setIsLoggedIn(true);
+        }
+      } catch (e) {
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkLogin();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return; // Only start polling if logged in
+
     loadData();
     const interval = setInterval(() => loadData(true), AUTO_REFRESH_INTERVAL);
     
@@ -75,7 +97,7 @@ export default function App() {
       clearInterval(interval);
       clearInterval(timeInterval);
     };
-  }, [loadData]);
+  }, [loadData, isLoggedIn]);
 
   const handleTabPress = (tab) => {
     if (tab === activeTab) return;
@@ -116,6 +138,23 @@ export default function App() {
       </Animated.View>
     );
   };
+
+  if (checkingAuth) {
+    return (
+      <View style={{flex: 1, backgroundColor: Colors.bgDark, justifyContent: 'center', alignItems: 'center'}}>
+         <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (!isLoggedIn) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor={Colors.bgDark} />
+        <LoginScreen onLoginSuccess={() => setIsLoggedIn(true)} />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>

@@ -4,13 +4,43 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Colors } from '../constants/colors';
 
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
 
 const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loading, mapRef, showRoute = true }, ref) => {
   const [showDevicePicker, setShowDevicePicker] = React.useState(false);
   const [routeCoords, setRouteCoords] = React.useState([]);
   const [isRouting, setIsRouting] = React.useState(false);
   const [pickerMode, setPickerMode] = React.useState('focus'); // 'focus' or 'route'
+  const [userLocation, setUserLocation] = React.useState(null);
+
+  React.useEffect(() => {
+    let locationSubscription;
+    (async () => {
+      try {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const loc = await Location.getCurrentPositionAsync({});
+          if (loc && loc.coords) {
+            setUserLocation(loc.coords);
+          }
+          // Watch for updates
+          locationSubscription = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.Balanced, timeInterval: 5000, distanceInterval: 10 },
+            (newLoc) => {
+              if (newLoc && newLoc.coords) {
+                setUserLocation(newLoc.coords);
+              }
+            }
+          );
+        }
+      } catch (e) {
+        console.warn('Location tracking error:', e);
+      }
+    })();
+    return () => {
+      if (locationSubscription) locationSubscription.remove();
+    };
+  }, []);
 
   useImperativeHandle(ref, () => ({
     openPicker: (mode = 'focus') => {
@@ -54,17 +84,14 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
       }, 800);
 
       if (pickerMode === 'route' && showRoute) {
-        // Get user location for routing
-        try {
-          const { status } = await Location.getForegroundPermissionsAsync();
-          if (status === 'granted') {
-            const userLoc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-            if (userLoc && userLoc.coords) {
-              fetchRoute(userLoc.coords, location);
-            }
-          }
-        } catch (err) {
-          console.warn('Could not get user location for routing');
+        if (userLocation) {
+          fetchRoute(userLocation, location);
+        } else {
+          // Fallback
+          try {
+            const loc = await Location.getCurrentPositionAsync({});
+            if (loc && loc.coords) fetchRoute(loc.coords, location);
+          } catch (e) {}
         }
       }
     }
@@ -82,6 +109,15 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
 
   // Focus on user location
   const handleFocusMe = async () => {
+    if (userLocation && mapRef && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 800);
+      return;
+    }
     try {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') return;
@@ -136,8 +172,8 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
         ref={mapRef}
         style={styles.map}
         initialRegion={defaultRegion}
-        mapType="satellite"
-        showsUserLocation={true}
+        mapType="none"
+        showsUserLocation={false}
         showsMyLocationButton={false}
         showsCompass={true}
         showsScale={true}
@@ -145,6 +181,27 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
         zoomEnabled={true}
         pitchEnabled={true}
       >
+        <UrlTile
+          urlTemplate="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&scale=2"
+          maximumZ={20}
+          tileSize={512}
+          flipY={false}
+        />
+        
+        {/* Custom User Location Marker */}
+        {userLocation && (
+          <Marker
+            coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}
+            title="Lokasi Anda"
+            anchor={{ x: 0.5, y: 0.5 }}
+            zIndex={999}
+          >
+            <View style={styles.userLocationOuter}>
+              <View style={styles.userLocationInner} />
+            </View>
+          </Marker>
+        )}
+
         {Array.isArray(locations) && locations.map((loc, idx) => {
           if (!loc) return null;
           const dev = deviceMap[loc.device_id];
@@ -180,8 +237,8 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
           );
         })}
 
-        {/* Historical GPS Trails */}
-        {trails && Object.entries(trails).map(([deviceId, trailCoords]) => {
+        {/* Historical GPS Trails (Hidden when routing is active) */}
+        {routeCoords.length === 0 && trails && Object.entries(trails).map(([deviceId, trailCoords]) => {
           if (!trailCoords || trailCoords.length < 2) return null;
           const isActive = deviceMap[deviceId]?.is_active === 1;
           const mapCoords = trailCoords.map(c => ({ latitude: c.lat, longitude: c.lng }));
@@ -358,6 +415,22 @@ const styles = StyleSheet.create({
     opacity: 0.3,
     marginTop: -6,
     zIndex: 1,
+  },
+  userLocationOuter: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userLocationInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#3b82f6',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
   legendContainer: {
     position: 'absolute',
