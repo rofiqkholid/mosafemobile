@@ -1,19 +1,19 @@
-import React, { forwardRef, useImperativeHandle } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform, TouchableOpacity, Modal, FlatList, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import { Colors } from '../constants/colors';
 
-import MapView, { Marker, Polyline, UrlTile } from 'react-native-maps';
-
 const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loading, mapRef, showRoute = true }, ref) => {
-  const [showDevicePicker, setShowDevicePicker] = React.useState(false);
-  const [routeCoords, setRouteCoords] = React.useState([]);
-  const [isRouting, setIsRouting] = React.useState(false);
-  const [pickerMode, setPickerMode] = React.useState('focus'); // 'focus' or 'route'
-  const [userLocation, setUserLocation] = React.useState(null);
+  const [showDevicePicker, setShowDevicePicker] = useState(false);
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [isRouting, setIsRouting] = useState(false);
+  const [pickerMode, setPickerMode] = useState('focus'); // 'focus' or 'route'
+  const [userLocation, setUserLocation] = useState(null);
+  const webViewRef = useRef(null);
 
-  React.useEffect(() => {
+  useEffect(() => {
     let locationSubscription;
     (async () => {
       try {
@@ -42,6 +42,7 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
     };
   }, []);
 
+  // Expose methods to parent ref (ref)
   useImperativeHandle(ref, () => ({
     openPicker: (mode = 'focus') => {
       setPickerMode(mode);
@@ -50,6 +51,46 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
     clearRoute: () => setRouteCoords([]),
   }));
 
+  // Bind parent's mapRef to support animateToRegion
+  useEffect(() => {
+    if (mapRef) {
+      mapRef.current = {
+        animateToRegion: (region, duration) => {
+          const action = {
+            type: 'animateToRegion',
+            latitude: region.latitude,
+            longitude: region.longitude,
+            zoom: region.latitudeDelta ? Math.round(Math.log2(360 / region.latitudeDelta)) : 15
+          };
+          webViewRef.current?.injectJavaScript(`
+            if (window.executeAction) {
+              window.executeAction(${JSON.stringify(action)});
+            }
+          `);
+        }
+      };
+    }
+  }, [mapRef]);
+
+  // Synchronize state data with the Leaflet WebView
+  const sendDataToMap = () => {
+    const data = {
+      locations,
+      devices,
+      trails,
+      routeCoords,
+      userLocation
+    };
+    webViewRef.current?.injectJavaScript(`
+      if (window.updateMapData) {
+        window.updateMapData(${JSON.stringify(data)});
+      }
+    `);
+  };
+
+  useEffect(() => {
+    sendDataToMap();
+  }, [locations, devices, trails, routeCoords, userLocation]);
 
   // Fetch route from OSRM
   const fetchRoute = async (userCoords, deviceCoords) => {
@@ -75,13 +116,19 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
 
   // Focus or Route selected IoT device
   const handleSelectDevice = async (device, location) => {
-    if (location && mapRef && mapRef.current) {
-      mapRef.current.animateToRegion({
+    if (location) {
+      // Focus on Leaflet Map
+      const action = {
+        type: 'animateToRegion',
         latitude: location.latitude,
         longitude: location.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 800);
+        zoom: 15
+      };
+      webViewRef.current?.injectJavaScript(`
+        if (window.executeAction) {
+          window.executeAction(${JSON.stringify(action)});
+        }
+      `);
 
       if (pickerMode === 'route' && showRoute) {
         if (userLocation) {
@@ -98,7 +145,6 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
     setShowDevicePicker(false);
   };
 
-
   const handleFocusIoT = () => {
     if (locations && locations.length > 0) {
       setPickerMode('focus');
@@ -106,16 +152,20 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
     }
   };
 
-
   // Focus on user location
   const handleFocusMe = async () => {
-    if (userLocation && mapRef && mapRef.current) {
-      mapRef.current.animateToRegion({
+    if (userLocation) {
+      const action = {
+        type: 'animateToRegion',
         latitude: userLocation.latitude,
         longitude: userLocation.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 800);
+        zoom: 15
+      };
+      webViewRef.current?.injectJavaScript(`
+        if (window.executeAction) {
+          window.executeAction(${JSON.stringify(action)});
+        }
+      `);
       return;
     }
     try {
@@ -126,26 +176,322 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
         accuracy: Location.Accuracy.Balanced,
       });
       
-      if (location && location.coords && mapRef && mapRef.current) {
-        mapRef.current.animateToRegion({
+      if (location && location.coords) {
+        const action = {
+          type: 'animateToRegion',
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }, 800);
+          zoom: 15
+        };
+        webViewRef.current?.injectJavaScript(`
+          if (window.executeAction) {
+            window.executeAction(${JSON.stringify(action)});
+          }
+        `);
       }
     } catch (err) {
       console.warn('Focus me error:', err);
     }
   };
 
-  // Default region
-  const defaultRegion = {
-    latitude: locations?.[0]?.latitude || -6.289382,
-    longitude: locations?.[0]?.longitude || 107.292801,
-    latitudeDelta: 0.05,
-    longitudeDelta: 0.05,
-  };
+  // Center coordinate for map initialization
+  const initialLat = locations?.[0]?.latitude || -6.289382;
+  const initialLng = locations?.[0]?.longitude || 107.292801;
+
+  // Leaflet HTML injection
+  const MAP_HTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <style>
+        body, html, #map {
+          margin: 0;
+          padding: 0;
+          height: 100%;
+          width: 100%;
+          background-color: #0F172A;
+        }
+        .leaflet-control-attribution {
+          background: rgba(15, 23, 42, 0.7) !important;
+          color: #94A3B8 !important;
+          font-size: 8px !important;
+        }
+        .marker-container {
+          position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .marker-outer {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background-color: #0F172A;
+          border: 2px solid;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2;
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.35);
+        }
+        .marker-outer.active {
+          border-color: #22C55E;
+        }
+        .marker-outer.inactive {
+          border-color: #EF4444;
+        }
+        .marker-pulse {
+          position: absolute;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          opacity: 0.3;
+          z-index: 1;
+          bottom: -4px;
+        }
+        .marker-pulse.active {
+          background-color: #22C55E;
+          animation: pulse 1.5s infinite;
+        }
+        .marker-pulse.inactive {
+          background-color: #EF4444;
+        }
+        @keyframes pulse {
+          0% {
+            transform: scale(0.8);
+            opacity: 0.8;
+          }
+          100% {
+            transform: scale(2.2);
+            opacity: 0;
+          }
+        }
+        .user-location-outer {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background-color: rgba(59, 130, 246, 0.3);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        }
+        .user-location-inner {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background-color: #3B82F6;
+          border: 2px solid #FFFFFF;
+          animation: userPulse 2s infinite;
+        }
+        @keyframes userPulse {
+          0% {
+            box-shadow: 0 0 0 0px rgba(59, 130, 246, 0.5);
+          }
+          100% {
+            box-shadow: 0 0 0 10px rgba(59, 130, 246, 0);
+          }
+        }
+        .leaflet-popup-content-wrapper {
+          background: #1E293B !important;
+          color: #F1F5F9 !important;
+          border: 1px solid #334155;
+          border-radius: 12px;
+          padding: 2px;
+          font-family: system-ui, -apple-system, sans-serif;
+        }
+        .leaflet-popup-tip {
+          background: #1E293B !important;
+          border: 1px solid #334155;
+        }
+        .popup-title {
+          font-weight: 700;
+          color: #F1F5F9;
+          font-size: 13px;
+          margin-bottom: 2px;
+        }
+        .popup-desc {
+          color: #94A3B8;
+          font-size: 11px;
+        }
+      </style>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        var map = L.map('map', {
+          zoomControl: false,
+          attributionControl: true
+        }).setView([${initialLat}, ${initialLng}], 13);
+        
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        var markers = {};
+        var userMarker = null;
+        var polylines = {};
+        var routePolyline = null;
+        
+        function createVehicleIcon(isActive) {
+          var color = isActive ? '#22C55E' : '#EF4444';
+          var outerClass = isActive ? 'active' : 'inactive';
+          var pulseClass = isActive ? 'active' : 'inactive';
+          
+          var html = '<div class="marker-container">' +
+            '<div class="marker-outer ' + outerClass + '">' +
+              '<svg viewBox="0 0 24 24" width="18" height="18" fill="' + color + '">' +
+                '<path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.85 7h10.29l1.04 3H5.81l1.04-3zM19 17H5v-5h14v5zM7.5 13c-.83 0-1.5.67-1.5 1.5S6.67 16 7.5 16s1.5-.67 1.5-1.5S8.33 13 7.5 13zm9 0c-.83 0-1.5.67-1.5 1.5s.67 1.5 1.5 1.5 1.5-.67 1.5-1.5-.67-1.5-1.5-1.5z"/>' +
+              '</svg>' +
+            '</div>' +
+            '<div class="marker-pulse ' + pulseClass + '"></div>' +
+          '</div>';
+          
+          return L.divIcon({
+            html: html,
+            className: '',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+          });
+        }
+        
+        var userIcon = L.divIcon({
+          html: '<div class="user-location-outer"><div class="user-location-inner"></div></div>',
+          className: '',
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+        
+        window.updateMapData = function(data) {
+          if (!data) return;
+          
+          var locations = data.locations || [];
+          var devices = data.devices || [];
+          var trails = data.trails || {};
+          var routeCoords = data.routeCoords || [];
+          var userLocation = data.userLocation;
+          
+          var deviceMap = {};
+          devices.forEach(function(d) {
+            if (d && d.device_id) deviceMap[d.device_id] = d;
+          });
+          
+          var activeDeviceIds = {};
+          locations.forEach(function(loc) {
+            if (!loc) return;
+            var id = loc.device_id;
+            activeDeviceIds[id] = true;
+            var lat = loc.latitude;
+            var lng = loc.longitude;
+            var dev = deviceMap[id];
+            var isActive = dev ? dev.is_active === 1 : false;
+            var speed = loc.speed || 0;
+            
+            var popupContent = '<div style="padding: 4px;">' +
+              '<div class="popup-title">' + id + '</div>' +
+              '<div class="popup-desc">Speed: ' + speed + ' km/h &bull; ' + (isActive ? 'Online' : 'Offline') + '</div>' +
+            '</div>';
+            
+            if (markers[id]) {
+              markers[id].setLatLng([lat, lng]);
+              markers[id].setIcon(createVehicleIcon(isActive));
+              markers[id].getPopup().setContent(popupContent);
+            } else {
+              markers[id] = L.marker([lat, lng], { icon: createVehicleIcon(isActive) })
+                .addTo(map)
+                .bindPopup(popupContent);
+            }
+          });
+          
+          for (var id in markers) {
+            if (!activeDeviceIds[id]) {
+              map.removeLayer(markers[id]);
+              delete markers[id];
+            }
+          }
+          
+          if (userLocation) {
+            if (userMarker) {
+              userMarker.setLatLng([userLocation.latitude, userLocation.longitude]);
+            } else {
+              userMarker = L.marker([userLocation.latitude, userLocation.longitude], { icon: userIcon })
+                .addTo(map)
+                .bindPopup('<div style="padding:4px;"><div class="popup-title">Lokasi Anda</div></div>');
+            }
+          } else if (userMarker) {
+            map.removeLayer(userMarker);
+            userMarker = null;
+          }
+          
+          if (routeCoords.length === 0) {
+            if (routePolyline) {
+              map.removeLayer(routePolyline);
+              routePolyline = null;
+            }
+            
+            var activeTrailIds = {};
+            for (var deviceId in trails) {
+              var trailCoords = trails[deviceId] || [];
+              if (trailCoords.length < 2) continue;
+              
+              activeTrailIds[deviceId] = true;
+              var latlngs = trailCoords.map(function(c) { return [c.lat, c.lng]; });
+              
+              if (polylines[deviceId]) {
+                polylines[deviceId].setLatLngs(latlngs);
+              } else {
+                polylines[deviceId] = L.polyline(latlngs, {
+                  color: '#0EA5E9',
+                  weight: 3,
+                  opacity: 0.8
+                }).addTo(map);
+              }
+            }
+            
+            for (var dId in polylines) {
+              if (!activeTrailIds[dId]) {
+                map.removeLayer(polylines[dId]);
+                delete polylines[dId];
+              }
+            }
+          } else {
+            for (var dId in polylines) {
+              map.removeLayer(polylines[dId]);
+            }
+            polylines = {};
+            
+            var routeLatLngs = routeCoords.map(function(c) { return [c.latitude, c.longitude]; });
+            if (routePolyline) {
+              routePolyline.setLatLngs(routeLatLngs);
+            } else {
+              routePolyline = L.polyline(routeLatLngs, {
+                color: '#0EA5E9',
+                weight: 4,
+                opacity: 0.9,
+                dashArray: '5, 8'
+              }).addTo(map);
+            }
+          }
+        };
+        
+        window.executeAction = function(action) {
+          if (!action) return;
+          if (action.type === 'animateToRegion') {
+            map.flyTo([action.latitude, action.longitude], action.zoom || 15, {
+              animate: true,
+              duration: 1.2
+            });
+          }
+        };
+      </script>
+    </body>
+    </html>
+  `;
 
   if (loading) {
     return (
@@ -168,101 +514,16 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
+      <WebView
+        ref={webViewRef}
+        originWhitelist={['*']}
+        source={{ html: MAP_HTML }}
         style={styles.map}
-        initialRegion={defaultRegion}
-        mapType="none"
-        showsUserLocation={false}
-        showsMyLocationButton={false}
-        showsCompass={true}
-        showsScale={true}
-        rotateEnabled={true}
-        zoomEnabled={true}
-        pitchEnabled={true}
-      >
-        <UrlTile
-          urlTemplate="https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}&scale=2"
-          maximumZ={20}
-          tileSize={512}
-          flipY={false}
-        />
-        
-        {/* Custom User Location Marker */}
-        {userLocation && (
-          <Marker
-            coordinate={{ latitude: userLocation.latitude, longitude: userLocation.longitude }}
-            title="Lokasi Anda"
-            anchor={{ x: 0.5, y: 0.5 }}
-            zIndex={999}
-          >
-            <View style={styles.userLocationOuter}>
-              <View style={styles.userLocationInner} />
-            </View>
-          </Marker>
-        )}
-
-        {Array.isArray(locations) && locations.map((loc, idx) => {
-          if (!loc) return null;
-          const dev = deviceMap[loc.device_id];
-          const isActive = dev?.is_active === 1;
-
-          return (
-            <Marker
-              key={`${loc.device_id}-${idx}`}
-              coordinate={{
-                latitude: loc.latitude,
-                longitude: loc.longitude,
-              }}
-              title={loc.device_id}
-              description={`Speed: ${loc.speed || 0} km/h`}
-            >
-              <View style={styles.markerContainer}>
-                <View style={[
-                  styles.markerOuter,
-                  { borderColor: isActive ? Colors.success : Colors.danger }
-                ]}>
-                  <Ionicons
-                    name="car"
-                    size={22}
-                    color={isActive ? Colors.success : Colors.danger}
-                  />
-                </View>
-                <View style={[
-                  styles.markerPulse,
-                  { backgroundColor: isActive ? Colors.success : Colors.danger }
-                ]} />
-              </View>
-            </Marker>
-          );
-        })}
-
-        {/* Historical GPS Trails (Hidden when routing is active) */}
-        {routeCoords.length === 0 && trails && Object.entries(trails).map(([deviceId, trailCoords]) => {
-          if (!trailCoords || trailCoords.length < 2) return null;
-          const isActive = deviceMap[deviceId]?.is_active === 1;
-          const mapCoords = trailCoords.map(c => ({ latitude: c.lat, longitude: c.lng }));
-          
-          return (
-            <Polyline
-              key={`trail-${deviceId}`}
-              coordinates={mapCoords}
-              strokeWidth={3}
-              strokeColor={Colors.primary}
-            />
-          );
-        })}
-
-        {/* OSRM Route to Device */}
-        {routeCoords.length > 0 && (
-          <Polyline
-            coordinates={routeCoords}
-            strokeWidth={4}
-            strokeColor={Colors.primary}
-            lineDashPattern={[1]}
-          />
-        )}
-      </MapView>
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        onLoadEnd={sendDataToMap}
+        scrollEnabled={false}
+      />
 
       {/* Map Overlay - Top Left Legend */}
       <View style={styles.legendContainer}>
@@ -293,7 +554,7 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
           onPress={handleFocusIoT}
           activeOpacity={0.8}
         >
-          <Ionicons name="car" size={24} color={Colors.primary} />
+          <Ionicons name="car" size={22} color={Colors.primary} />
         </TouchableOpacity>
         
         <TouchableOpacity 
@@ -301,7 +562,7 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
           onPress={handleFocusMe}
           activeOpacity={0.8}
         >
-          <Ionicons name="locate" size={24} color={Colors.success} />
+          <Ionicons name="locate" size={22} color={Colors.success} />
         </TouchableOpacity>
       </View>
 
@@ -364,7 +625,6 @@ const TrackingMap = forwardRef(({ locations = [], devices = [], trails = {}, loa
 
 export default TrackingMap;
 
-
 const styles = StyleSheet.create({
   container: {
     height: 320,
@@ -376,6 +636,7 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+    backgroundColor: Colors.bgDark,
   },
   loadingContainer: {
     height: 320,
@@ -391,46 +652,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 14,
     fontWeight: '500',
-  },
-  markerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  markerOuter: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#0F172A',
-    borderWidth: 2,
-    borderStyle: 'solid',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-    overflow: 'hidden',
-  },
-  markerPulse: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    opacity: 0.3,
-    marginTop: -6,
-    zIndex: 1,
-  },
-  userLocationOuter: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  userLocationInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#3b82f6',
-    borderWidth: 2,
-    borderColor: '#ffffff',
   },
   legendContainer: {
     position: 'absolute',
@@ -467,9 +688,9 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     backgroundColor: '#1E293B',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
